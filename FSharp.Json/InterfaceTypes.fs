@@ -11,6 +11,10 @@ type ITypeTransform =
     abstract member toTargetType: obj -> obj
     /// Transform from target type
     abstract member fromTargetType: obj -> obj
+    
+type IEnumFilter =
+    abstract member filterFrom: obj -> obj
+    abstract member filterTo: obj -> obj
 
 /// Controls Enum serialization
 type EnumMode =
@@ -32,6 +36,8 @@ type JsonField (name: string) =
     member val public Transform: Type = null with get, set
     /// Controls how Enum values should be represented. Default value is Name.
     member val public EnumValue: EnumMode = EnumMode.Default with get, set
+    /// Filter that should be applied to enum. Default value is null.
+    member val public EnumFilter: Type = null with get, set
     /// Sets default value for non option member. Default value is null.
     member val public DefaultValue: obj = null with get, set
     /// Controls default DateTime and DateTimeOffset formats. Default value is "yyyy-MM-ddTHH:mm:ss.fffffffK".

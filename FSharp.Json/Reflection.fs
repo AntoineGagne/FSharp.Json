@@ -46,7 +46,7 @@ module internal Reflection =
         let theFunction = new Func<_, _>(theFunction)
         let cache = new ConcurrentDictionary<'P, 'R>()
         fun parameter -> cache.GetOrAdd(parameter, theFunction)
-
+    
     let isRecord: Type -> bool = FSharpType.IsRecord |> cacheResult
     let getRecordFields: Type -> PropertyInfo [] = FSharpType.GetRecordFields |> cacheResult
 

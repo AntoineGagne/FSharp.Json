@@ -71,26 +71,45 @@ module internal Core =
 
     let failSerialization (message: string) =
         raise (new JsonSerializationError(message))
+        
+    let createEnumFilter (filterType: Type) =
+        let theConstructor = filterType.GetConstructors().[0]
+        theConstructor.Invoke([||]) :?> IEnumFilter
+    
+    let getEnumFilter =
+        createEnumFilter |> cacheResult
+    
+    let filterToEnum (value: obj) (filter: Type) =
+        match filter with
+        | null -> value
+        | filterType ->
+            let enumFilter = getEnumFilter filterType
+            enumFilter.filterTo(value)
 
     let rec serialize (config: JsonConfig) (t: Type) (value: obj): JsonValue =
         let serializeEnum (t: Type) (jsonField: JsonField) (value: obj): JsonValue =
             let baseT = Enum.GetUnderlyingType t
             let enumMode = getEnumMode config jsonField
+            let filterType = jsonField.EnumFilter
             match enumMode with
             | EnumMode.Value ->
                 match baseT with
                 | t when t = typeof<int> ->
                     let enumValue = decimal (value :?> int)
-                    JsonValue.Number enumValue
+                    let value = filterToEnum enumValue filterType :?> decimal
+                    JsonValue.Number value
                 | t when t = typeof<byte> ->
                     let enumValue = decimal (value :?> byte)
-                    JsonValue.Number enumValue
+                    let value = filterToEnum enumValue filterType :?> decimal
+                    JsonValue.Number value
                 | t when t = typeof<char> ->
                     let enumValue = sprintf "%c" (value :?> char)
-                    JsonValue.String enumValue
+                    let value = filterToEnum enumValue filterType :?> string
+                    JsonValue.String value
             | EnumMode.Name ->
                 let strvalue = Enum.GetName(t, value)
-                JsonValue.String strvalue
+                let value = filterToEnum strvalue filterType :?> string
+                JsonValue.String value
             | mode -> failSerialization <| sprintf "Failed to serialize enum %s, unsupported enum mode: %A" t.Name mode
 
         let getUntypedType (t: Type) (value: obj): Type =
@@ -283,26 +302,37 @@ module internal Core =
         | JsonValue.Array _ -> getListType typeof<obj>
         | JsonValue.Boolean _ -> typeof<bool>
         | _ -> null
+        
+    let filterFromEnum (value: obj) (filter: Type) =
+        match filter with
+        | null -> value
+        | filterType ->
+            let enumFilter = getEnumFilter filterType
+            enumFilter.filterFrom(value)
                 
     let rec deserialize (config: JsonConfig) (path: JsonPath) (t: Type) (jvalue: JsonValue): obj =
         let deserializeEnum (path: JsonPath) (t: Type) (jsonField: JsonField) (jvalue: JsonValue): obj =
             let baseT = Enum.GetUnderlyingType t
             let enumMode = getEnumMode config jsonField
+            let filterType = jsonField.EnumFilter
             match enumMode with
             | EnumMode.Value ->
                 match baseT with
-                | baseT when baseT = typeof<int> ->
-                    let enumValue = JsonValueHelpers.getInt path jvalue
+                | _ when baseT = typeof<int> ->
+                    let enumValue = filterFromEnum (JsonValueHelpers.getInt path jvalue :> obj) filterType
                     Enum.ToObject(t, enumValue)
-                | baseT when baseT = typeof<byte> ->
-                    let enumValue = JsonValueHelpers.getByte path jvalue
+                | _ when baseT = typeof<byte> ->
+                    let enumValue = filterFromEnum (JsonValueHelpers.getByte path jvalue :> obj) filterType
                     Enum.ToObject(t, enumValue)
-                | baseT when baseT = typeof<char> ->
-                    let enumValue = JsonValueHelpers.getChar path jvalue
+                | _ when baseT = typeof<char> ->
+                    let enumValue = filterFromEnum (JsonValueHelpers.getChar path jvalue :> obj) filterType
                     Enum.ToObject(t, enumValue)
+                | _ ->
+                    failDeserialization path <| sprintf "Failed to deserialize enum %s, unsupported value: %A" t.Name jvalue
             | EnumMode.Name ->
                 let valueStr = JsonValueHelpers.getString path jvalue
-                Enum.Parse(t, valueStr)
+                let value = filterFromEnum valueStr filterType :?> string
+                Enum.Parse(t, value)
             | mode -> failDeserialization path <| sprintf "Failed to deserialize enum %s, unsupported enum mode: %A" t.Name mode
 
         let getUntypedType (path: JsonPath) (t: Type) (jvalue: JsonValue): Type =
