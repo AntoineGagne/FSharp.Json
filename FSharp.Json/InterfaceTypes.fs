@@ -12,8 +12,11 @@ type ITypeTransform =
     /// Transform from target type
     abstract member fromTargetType: obj -> obj
     
+/// Filter enums
 type IEnumFilter =
+    /// Apply the filter when deserializing
     abstract member filterFrom: obj -> obj
+    /// Apply the filter when serializing
     abstract member filterTo: obj -> obj
 
 /// Controls Enum serialization
